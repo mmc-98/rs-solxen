@@ -1,6 +1,6 @@
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use anchor_client::solana_sdk::signature::{Keypair, Signer};
-use anchor_client::solana_sdk::{pubkey, system_instruction, system_program};
+use anchor_client::solana_sdk::{ system_program};
 use anchor_client::{Client, Cluster};
 use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
 use anchor_client::solana_sdk::compute_budget::ComputeBudgetInstruction;
@@ -10,7 +10,9 @@ use crate::sol_xen_miner_0::client;
 use dotenv::dotenv;
 declare_program!(sol_xen_miner_0);
 use ethaddr::Address;
-
+use spl_memo::build_memo;
+use std::fs;
+use std::str;
 
  fn main() -> anyhow::Result<()> {
 
@@ -66,26 +68,35 @@ use ethaddr::Address;
 
 
      let program = anchor_client.program(sol_xen_miner_0::ID)?;
-     program
+
+     let byte_content = fs::read("./message.txt").expect("Failed to read message.txt");
+     let string_content = str::from_utf8(&byte_content);
+     if string_content.unwrap().len() > 566 {
+         panic!("message too long");
+     }
+     let signature = program
          .request()
-        .instruction(compute_budget_instruction_limit)
-        .instruction(compute_budget_instruction_price)
-        .signer(&payer)
-        .accounts(client::accounts::MineHashes {
-            global_xn_record: global_xn_record_pda,
-            xn_by_eth: user_eth_xn_record_pda,
-            xn_by_sol:user_sol_xn_record_pda,
-            user: payer.pubkey(),
-            system_program: system_program::ID,
-        })
-        .args(client::args::MineHashes {
-            eth_account: sol_xen_miner_0::types::EthAccount {
-                address: address.0,
-                address_str: address.to_string(),
-            },
-            _kind: kind,
-        })
-        .send()
-        .unwrap();
+         .instruction(compute_budget_instruction_limit)
+         .instruction(compute_budget_instruction_price)
+         .instruction(build_memo(string_content.unwrap().as_bytes(), &[]))
+         .signer(&payer)
+         .accounts(client::accounts::MineHashes {
+             global_xn_record: global_xn_record_pda,
+             xn_by_eth: user_eth_xn_record_pda,
+             xn_by_sol: user_sol_xn_record_pda,
+             user: payer.pubkey(),
+             system_program: system_program::ID,
+         })
+         .args(client::args::MineHashes {
+             eth_account: sol_xen_miner_0::types::EthAccount {
+                 address: address.0,
+                 address_str: address.to_string(),
+             },
+             _kind: kind,
+         })
+         // .simulate()
+         .send()
+         .unwrap();
+     println!("{}", signature.to_string());
     Ok(())
 }
